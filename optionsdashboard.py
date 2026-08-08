@@ -81,7 +81,7 @@ def nearest_strike(price, step=50):
     return int(round(price / step) * step)
 
 # --- Streamlit UI ---
-st.title("Options Strategy Simulator with Outlook & Strikes")
+st.title("Options Strategy Simulator with Outlook & Strikes - Developed by Sudhagar K ")
 
 symbol = st.text_input("Enter NSE/MCX symbol (e.g., RELIANCE, SILVERMIC)", "RELIANCE")
 strike = st.number_input("Strike Price", value=2500)
