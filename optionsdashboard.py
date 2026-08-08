@@ -70,6 +70,35 @@ def payoff_metrics(strategy, S, K, premium=10):
 
     return prices, payoff, max_profit, max_loss, breakeven
 
+# --- Best Strikes ---
+def best_strikes(strategy, S, strike_range, T, r, sigma, lot=505):
+    results = []
+    for K in strike_range:
+        prices, payoff, max_profit, max_loss, breakeven = payoff_metrics(strategy, S, K)
+        results.append({
+            "Strike": K,
+            "MaxProfit": max_profit,
+            "MaxLoss": max_loss,
+            "Breakeven": breakeven
+        })
+    df = pd.DataFrame(results)
+    df_numeric = df[df["MaxProfit"].apply(lambda x: isinstance(x,(int,float)))]
+    df_top5 = df_numeric.sort_values("MaxProfit", ascending=False).head(5)
+    return df_top5
+
+# --- Combined Payoff Chart ---
+def combined_payoff_chart(strategy, S, top5_strikes, T, r, sigma):
+    fig, ax = plt.subplots()
+    for K in top5_strikes["Strike"]:
+        prices, payoff, _, _, _ = payoff_metrics(strategy, S, K)
+        ax.plot(prices, payoff, label=f"Strike {K}")
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.set_xlabel("Stock Price at Expiry")
+    ax.set_ylabel("Profit / Loss")
+    ax.set_title(f"Combined Payoff Chart - {strategy}")
+    ax.legend()
+    return fig
+
 # --- Greeks Surface ---
 def greeks_surface(S, strikes, expiries, r, sigma, option_type="call", greek="Delta"):
     surface = []
@@ -82,7 +111,7 @@ def greeks_surface(S, strikes, expiries, r, sigma, option_type="call", greek="De
     return np.array(surface)
 
 # --- Streamlit UI ---
-st.title("Options Strategy Simulator with Ratio Spreads - Developed by Sudhagar K")
+st.title("Options Strategy Simulator with Top 5 Strikes & Ratio Spreads - Developed by Sudhagar K")
 
 symbol = st.text_input("Enter NSE symbol (e.g., RELIANCE)", "RELIANCE")
 strike = st.number_input("Strike Price", value=2500)
@@ -127,6 +156,24 @@ st.write(f"Max Profit: {max_profit}")
 st.write(f"Max Loss: {max_loss}")
 st.write(f"Breakeven: {breakeven}")
 
+# --- Top 5 Strikes ---
+strike_range = np.arange(S*0.8, S*1.2, 50)
+df_top5 = best_strikes(strategy, S, strike_range, T, r, IV)
+
+st.subheader("Top 5 Strikes for Selected Strategy")
+st.write(df_top5)
+
+best_row = df_top5.iloc[0]
+st.write("Best Strike:", best_row["Strike"])
+st.write("Max Profit:", best_row["MaxProfit"])
+st.write("Max Loss:", best_row["MaxLoss"])
+st.write("Breakeven:", best_row["Breakeven"])
+
+# --- Combined Payoff Chart ---
+st.subheader("Combined Payoff Chart for Top 5 Strikes")
+fig = combined_payoff_chart(strategy, S, df_top5, T, r, IV)
+st.pyplot(fig)
+
 # --- Interactive Greek Selection ---
 greek_choice = st.selectbox(
     "Select Greek for 3D Surface",
@@ -134,8 +181,8 @@ greek_choice = st.selectbox(
 )
 
 # Define ranges
-strike_range = np.arange(S*0.8, S*1.2, 50)   # 20% band around ATM
-expiry_range = np.linspace(1/365, 90/365, 30)  # 1 to 90 days
+strike_range = np.arange(S*0.8, S*1.2, 50)
+expiry_range = np.linspace(1/365, 90/365, 30)
 
 # Compute surface for chosen Greek
 Z = greeks_surface(S, strike_range, expiry_range, r, IV, "call", greek=greek_choice)
