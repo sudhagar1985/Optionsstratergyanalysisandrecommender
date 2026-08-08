@@ -26,26 +26,26 @@ def greeks(S, K, T, r, sigma, option_type="call"):
     rho = K*T*np.exp(-r*T)*(si.norm.cdf(d2) if option_type=="call" else -si.norm.cdf(-d2))
     return {"Delta":delta,"Gamma":gamma,"Vega":vega,"Theta":theta,"Rho":rho}
 
-# --- Strategy Recommendation (book-inspired) ---
+# --- Strategy Recommendation ---
 def recommend_strategy(IV, HV, outlook="neutral"):
     if IV > HV*1.2:
         return "Iron Condor / Credit Spread (sell volatility)"
     elif IV < HV*0.8:
         return "Long Straddle / Strangle (buy volatility)"
     elif outlook == "bullish":
-        return "Covered Call (income) / Bull Call Spread"
+        return "Covered Call / Bull Call Spread"
     elif outlook == "bearish":
         return "Protective Put / Bear Put Spread"
     else:
         return "Butterfly Spread / Calendar Spread"
 
-# --- Payoff Diagrams (simplified) ---
+# --- Payoff Diagrams ---
 def payoff_diagram(strategy, S, K):
     prices = np.linspace(S*0.7, S*1.3, 100)
     payoff = []
-    if strategy.startswith("Covered Call"):
+    if "Covered Call" in strategy:
         payoff = [(p-S) - max(0, p-K) for p in prices]
-    elif strategy.startswith("Protective Put"):
+    elif "Protective Put" in strategy:
         payoff = [(p-S) + max(0, K-p) for p in prices]
     elif "Iron Condor" in strategy:
         payoff = [min(max(p-(K-100),0),100) - min(max(p-(K+100),0),100) for p in prices]
@@ -56,7 +56,8 @@ def payoff_diagram(strategy, S, K):
     return prices, payoff
 
 # --- Streamlit UI ---
-st.title("Options Strategy Dashboard (Book + Data)")
+st.title("Options Strategy Dashboard with Payoff Diagrams")
+
 symbol = st.text_input("Enter NSE stock symbol (e.g., RELIANCE, INFY)", "RELIANCE")
 strike = st.number_input("Strike Price", value=2500)
 days = st.slider("Days to Expiry", 1, 90, 30)
@@ -68,8 +69,13 @@ S = stock.history(period="1d")['Close'].iloc[-1]
 r = 0.06
 T = days/365
 
-# Volatility estimates
-data = stock.history(period="1y")['Adj Close']
+# Volatility estimates with safe fallback
+hist = stock.history(period="1y")
+if "Adj Close" in hist.columns:
+    data = hist["Adj Close"]
+else:
+    data = hist["Close"]
+
 log_returns = np.log(data/data.shift(1)).dropna()
 HV = np.std(log_returns)*np.sqrt(252)
 IV = HV*1.1  # placeholder, replace with NSE chain IV
@@ -91,7 +97,6 @@ st.write(strategy)
 
 # Payoff diagram
 prices, payoff = payoff_diagram(strategy, S, strike)
-import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 ax.plot(prices, payoff, label=strategy)
 ax.axhline(0, color='black', linewidth=0.8)
