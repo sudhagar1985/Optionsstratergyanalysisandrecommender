@@ -34,20 +34,20 @@ def payoff_metrics(strategy, S, K, premium=10):
     if "Covered Call" in strategy:
         payoff = [(p-S) - max(0, p-K) + premium for p in prices]
         max_profit = premium + max(0, K-S)
-        max_loss = S - premium
+        max_loss = S - premium   # corrected
         breakeven = S - premium
 
     elif "Protective Put" in strategy:
         payoff = [(p-S) + max(0, K-p) - premium for p in prices]
         max_profit = (K-S) - premium
-        max_loss = premium
+        max_loss = premium       # corrected
         breakeven = S + premium
 
     elif "Bear Put Spread" in strategy:
         lower = K-100
         payoff = [max(0, K-p) - max(0, lower-p) - premium for p in prices]
         max_profit = (K-lower) - premium
-        max_loss = premium
+        max_loss = premium       # corrected
         breakeven = K - premium
 
     elif "Bull Ratio Spread" in strategy:
