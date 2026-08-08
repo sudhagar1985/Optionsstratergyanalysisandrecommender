@@ -26,6 +26,50 @@ def greeks(S, K, T, r, sigma, option_type="call"):
     rho = K*T*np.exp(-r*T)*(si.norm.cdf(d2) if option_type=="call" else -si.norm.cdf(-d2))
     return {"Delta":delta,"Gamma":gamma,"Vega":vega,"Theta":theta,"Rho":rho}
 
+# --- Payoff Metrics ---
+def payoff_metrics(strategy, S, K, premium=10):
+    prices = np.linspace(S*0.7, S*1.3, 100)
+    payoff = []
+
+    if "Covered Call" in strategy:
+        payoff = [(p-S) - max(0, p-K) + premium for p in prices]
+        max_profit = premium + max(0, K-S)
+        max_loss = S - premium
+        breakeven = S - premium
+
+    elif "Protective Put" in strategy:
+        payoff = [(p-S) + max(0, K-p) - premium for p in prices]
+        max_profit = (K-S) - premium
+        max_loss = premium
+        breakeven = S + premium
+
+    elif "Bear Put Spread" in strategy:
+        lower = K-100
+        payoff = [max(0, K-p) - max(0, lower-p) - premium for p in prices]
+        max_profit = (K-lower) - premium
+        max_loss = premium
+        breakeven = K - premium
+
+    elif "Bull Ratio Spread" in strategy:
+        payoff = [max(0, p-K) - 2*max(0, p-(K+100)) for p in prices]
+        max_profit = 100
+        max_loss = "Unlimited"
+        breakeven = (K+100, "Unlimited")
+
+    elif "Bear Ratio Spread" in strategy:
+        payoff = [max(0, K-p) - 2*max(0, (K-100)-p) for p in prices]
+        max_profit = 100
+        max_loss = "Unlimited"
+        breakeven = (K-100, "Unlimited")
+
+    else:
+        payoff = [0 for p in prices]
+        max_profit = 0
+        max_loss = 0
+        breakeven = None
+
+    return prices, payoff, max_profit, max_loss, breakeven
+
 # --- Greeks Surface ---
 def greeks_surface(S, strikes, expiries, r, sigma, option_type="call", greek="Delta"):
     surface = []
@@ -38,7 +82,7 @@ def greeks_surface(S, strikes, expiries, r, sigma, option_type="call", greek="De
     return np.array(surface)
 
 # --- Streamlit UI ---
-st.title("Options Strategy Simulator with Greeks Surface - Developed by Sudhagar K")
+st.title("Options Strategy Simulator with Ratio Spreads - Developed by Sudhagar K")
 
 symbol = st.text_input("Enter NSE symbol (e.g., RELIANCE)", "RELIANCE")
 strike = st.number_input("Strike Price", value=2500)
@@ -61,6 +105,27 @@ st.subheader("Market Data")
 st.write(f"Spot Price: {S:.2f}")
 st.write(f"Implied Volatility (IV): {IV:.2f}")
 st.write(f"Historical Volatility (HV): {HV:.2f}")
+
+# --- Strategy Selection ---
+strategy = st.selectbox(
+    "Select Strategy",
+    ["Covered Call", "Protective Put", "Bear Put Spread", "Bull Ratio Spread", "Bear Ratio Spread"]
+)
+
+# Payoff diagram + metrics
+prices, payoff, max_profit, max_loss, breakeven = payoff_metrics(strategy, S, strike)
+fig, ax = plt.subplots()
+ax.plot(prices, payoff, label=strategy)
+ax.axhline(0, color='black', linewidth=0.8)
+ax.set_xlabel("Stock Price at Expiry")
+ax.set_ylabel("Profit / Loss")
+ax.legend()
+st.pyplot(fig)
+
+st.subheader("Strategy Metrics")
+st.write(f"Max Profit: {max_profit}")
+st.write(f"Max Loss: {max_loss}")
+st.write(f"Breakeven: {breakeven}")
 
 # --- Interactive Greek Selection ---
 greek_choice = st.selectbox(
