@@ -1,0 +1,101 @@
+import streamlit as st
+import yfinance as yf
+import numpy as np
+import scipy.stats as si
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# --- Black-Scholes Formula ---
+def black_scholes(S, K, T, r, sigma, option_type="call"):
+    d1 = (np.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    if option_type == "call":
+        return (S*si.norm.cdf(d1) - K*np.exp(-r*T)*si.norm.cdf(d2))
+    else:
+        return (K*np.exp(-r*T)*si.norm.cdf(-d2) - S*si.norm.cdf(-d1))
+
+# --- Greeks ---
+def greeks(S, K, T, r, sigma, option_type="call"):
+    d1 = (np.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    delta = si.norm.cdf(d1) if option_type=="call" else -si.norm.cdf(-d1)
+    gamma = si.norm.pdf(d1)/(S*sigma*np.sqrt(T))
+    vega = S*si.norm.pdf(d1)*np.sqrt(T)
+    theta = -(S*si.norm.pdf(d1)*sigma)/(2*np.sqrt(T)) - r*K*np.exp(-r*T)*si.norm.cdf(d2 if option_type=="call" else -d2)
+    rho = K*T*np.exp(-r*T)*(si.norm.cdf(d2) if option_type=="call" else -si.norm.cdf(-d2))
+    return {"Delta":delta,"Gamma":gamma,"Vega":vega,"Theta":theta,"Rho":rho}
+
+# --- Strategy Recommendation (book-inspired) ---
+def recommend_strategy(IV, HV, outlook="neutral"):
+    if IV > HV*1.2:
+        return "Iron Condor / Credit Spread (sell volatility)"
+    elif IV < HV*0.8:
+        return "Long Straddle / Strangle (buy volatility)"
+    elif outlook == "bullish":
+        return "Covered Call (income) / Bull Call Spread"
+    elif outlook == "bearish":
+        return "Protective Put / Bear Put Spread"
+    else:
+        return "Butterfly Spread / Calendar Spread"
+
+# --- Payoff Diagrams (simplified) ---
+def payoff_diagram(strategy, S, K):
+    prices = np.linspace(S*0.7, S*1.3, 100)
+    payoff = []
+    if strategy.startswith("Covered Call"):
+        payoff = [(p-S) - max(0, p-K) for p in prices]
+    elif strategy.startswith("Protective Put"):
+        payoff = [(p-S) + max(0, K-p) for p in prices]
+    elif "Iron Condor" in strategy:
+        payoff = [min(max(p-(K-100),0),100) - min(max(p-(K+100),0),100) for p in prices]
+    elif "Straddle" in strategy:
+        payoff = [max(0, p-K) + max(0, K-p) for p in prices]
+    elif "Butterfly" in strategy:
+        payoff = [max(0, p-(K-50)) - 2*max(0, p-K) + max(0, p-(K+50)) for p in prices]
+    return prices, payoff
+
+# --- Streamlit UI ---
+st.title("Options Strategy Dashboard (Book + Data)")
+symbol = st.text_input("Enter NSE stock symbol (e.g., RELIANCE, INFY)", "RELIANCE")
+strike = st.number_input("Strike Price", value=2500)
+days = st.slider("Days to Expiry", 1, 90, 30)
+outlook = st.selectbox("Market Outlook", ["neutral","bullish","bearish"])
+
+ticker = f"{symbol}.NS"
+stock = yf.Ticker(ticker)
+S = stock.history(period="1d")['Close'].iloc[-1]
+r = 0.06
+T = days/365
+
+# Volatility estimates
+data = stock.history(period="1y")['Adj Close']
+log_returns = np.log(data/data.shift(1)).dropna()
+HV = np.std(log_returns)*np.sqrt(252)
+IV = HV*1.1  # placeholder, replace with NSE chain IV
+
+# Strategy recommendation
+strategy = recommend_strategy(IV, HV, outlook)
+
+# Greeks
+greek_vals = greeks(S, strike, T, r, IV, "call")
+st.subheader("Greeks")
+st.write(greek_vals)
+
+st.subheader("Volatility Analysis")
+st.write(f"Implied Volatility (IV): {IV:.2f}")
+st.write(f"Historical Volatility (HV): {HV:.2f}")
+
+st.subheader("Recommended Strategy")
+st.write(strategy)
+
+# Payoff diagram
+prices, payoff = payoff_diagram(strategy, S, strike)
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.plot(prices, payoff, label=strategy)
+ax.axhline(0, color='black', linewidth=0.8)
+ax.set_xlabel("Stock Price at Expiry")
+ax.set_ylabel("Profit / Loss")
+ax.legend()
+st.pyplot(fig)
