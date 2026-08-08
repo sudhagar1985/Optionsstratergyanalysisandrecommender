@@ -76,14 +76,18 @@ def payoff_metrics(strategy, S, K, premium=10):
 
     return prices, payoff, max_profit, max_loss, breakeven
 
+# --- Strike rounding helper ---
+def nearest_strike(price, step=50):
+    return int(round(price / step) * step)
+
 # --- Streamlit UI ---
 st.title("Options Strategy Simulator with Outlook & Strikes")
 
-symbol = st.text_input("Enter NSE stock symbol (e.g., RELIANCE, INFY)", "RELIANCE")
+symbol = st.text_input("Enter NSE/MCX symbol (e.g., RELIANCE, SILVERMIC)", "RELIANCE")
 strike = st.number_input("Strike Price", value=2500)
 days = st.slider("Days to Expiry", 1, 90, 30)
 
-ticker = f"{symbol}.NS"
+ticker = f"{symbol}.NS" if not symbol.upper().startswith("SILVER") else symbol
 stock = yf.Ticker(ticker)
 S = stock.history(period="1d")['Close'].iloc[-1]
 r = 0.06
@@ -98,7 +102,7 @@ else:
 
 log_returns = np.log(data/data.shift(1)).dropna()
 HV = np.std(log_returns)*np.sqrt(252)
-IV = HV*1.1  # placeholder, replace with NSE chain IV
+IV = HV*1.1  # placeholder, replace with NSE/MCX chain IV
 
 # --- Market Outlook Prediction ---
 trend = data.tail(20).mean() - data.tail(60).mean()
@@ -112,10 +116,10 @@ else:
 # Strategy recommendation
 strategy = recommend_strategy(IV, HV, outlook)
 
-# Suggested strikes
-ATM = round(S, -2)  # nearest 100
-OTM_call = round(S*1.05, -2)
-OTM_put = round(S*0.95, -2)
+# Suggested strikes (ATM + OTM with proper rounding)
+ATM = nearest_strike(S, step=50)
+OTM_call = nearest_strike(S * 1.05, step=50)
+OTM_put  = nearest_strike(S * 0.95, step=50)
 
 # Greeks
 greek_vals = greeks(S, strike, T, r, IV, "call")
